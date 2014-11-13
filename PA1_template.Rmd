@@ -4,22 +4,120 @@ output:
   html_document:
     keep_md: true
 ---
-
+Reproducible Research: Peer Assessment 1
+=========================================
 
 ## Loading and preprocessing the data
+```{r}
+Sys.setlocale("LC_TIME", "English")
+library("dplyr")
+library("lattice")
+unzip("activity.zip", "activity.csv")
+activity <- read.csv("activity.csv")
+```
 
 
 
 ## What is mean total number of steps taken per day?
 
+**1. Make a histogram of the total number of steps taken each day**
 
+```{r}
+total_steps <- aggregate(activity$steps, list(activity$date), sum)
+names(total_steps) <- c("date", "total.steps")
+hist(total_steps$total.steps)
+```
+
+**2. Calculate and report the mean and median total number of steps taken per day:**
+
+```{r}
+mean_median_steps <- aggregate(activity$steps, list(activity$date), mean)
+names(mean_median_steps) <- c("date", "mean.steps")
+mean_median_steps$median.steps <- aggregate(activity$steps, list(activity$date), median)[,2]
+print(mean_median_steps)
+```
 
 ## What is the average daily activity pattern?
 
+**1. Make a time series plot (i.e. type = "l") of the 5-minute interval (x-axis) and the average number of steps taken, averaged across all days (y-axis)**
 
+```{r}
+interval_steps <- summarise(group_by(activity, interval), mean(steps, na.rm=T))
+names(interval_steps) <- c("interval", "mean.steps")
+plot(interval_steps$interval, interval_steps$mean.steps, type = "l", xlab="Interval", ylab="Average")
+i <- which.max(interval_steps$mean.steps)
+max <- interval_steps[i,1]
+```
+**2. Which 5-minute interval, on average across all the days in the dataset, contains the maximum number of steps?**
+
+The 5-minute interval that contains the maximum number of steps is **`r max`**.
 
 ## Imputing missing values
 
+**1. Calculate and report the total number of missing values in the dataset (i.e. the total number of rows with NAs)**
 
+```{r}
+N <- sum(is.na(activity$steps))
+```
+The total number of NAs is **``r N``**.
+
+**2. Devise a strategy for filling in all of the missing values in the dataset. The strategy does not need to be sophisticated. For example, you could use the mean/median for that day, or the mean for that 5-minute interval, etc.**
+
+The selected imputation strategy will be: *to use the rounded mean for that 5-minutes interval averaged across all days*.
+
+**3. Create a new dataset that is equal to the original dataset but with the missing data filled in.**
+
+```{r}
+new_activity <- activity
+for (i in seq_len(nrow(new_activity))){
+    if (is.na(new_activity[i,1])){
+        interval_value <- new_activity[i,3]
+        mean_index <- match(interval_value, interval_steps$interval)
+        new_activity[i,1] <- round(interval_steps[mean_index,2],0)
+    }
+}
+```
+
+**4. Make a histogram of the total number of steps taken each day and Calculate and report the mean and median total number of steps taken per day. Do these values differ from the estimates from the first part of the assignment? What is the impact of imputing missing data on the estimates of the total daily number of steps?**
+
+New histogram:
+```{r}
+new_total_steps <- aggregate(new_activity$steps, list(new_activity$date), sum)
+names(new_total_steps) <- c("date", "total.steps")
+hist(new_total_steps$total.steps, xlab='Total steps')
+```
+
+New mean and median:
+```{r}
+new_mean_median_steps <- aggregate(new_activity$steps, list(new_activity$date), mean)
+names(new_mean_median_steps) <- c("date", "mean")
+new_mean_median_steps$median <- aggregate(new_activity$steps, list(new_activity$date), median)[,2]
+print(new_mean_median_steps)
+```
+The new values of means and medians are only different from those where NAs where present in the previous table. For those completed days (withous NAs), mean and median values did not change.
+
+After imputing the NA values, the histogram of total daily number os steps changed. It now looks more similar to a normal distribution.
 
 ## Are there differences in activity patterns between weekdays and weekends?
+
+**1. Create a new factor variable in the dataset with two levels - "weekday" and "weekend" indicating whether a given date is a weekday or weekend day.**
+
+```{r}
+new_activity$date <- strptime(new_activity$date, format = "%Y-%m-%d")
+new_activity$day <- weekdays(new_activity$date)
+for (i in seq_len(nrow(new_activity))){
+    if (new_activity$day[i]=="Saturday" | new_activity$day[i]=="Sunday"){
+        new_activity$day[i] <- "weekend" 
+    }else{
+        new_activity$day[i] <- "weekday" 
+    }    
+}
+
+new_activity$day <- factor(new_activity$day, levels = c('weekday','weekend'))
+new_activity <- new_activity[,-2]
+new_interval_steps <- summarise(group_by(new_activity, interval, day), mean(steps))
+names(new_interval_steps) <- c("interval","day", "mean")
+xyplot( mean ~ interval | day, data = new_interval_steps, layout = c(1, 2), type='l', ylab='Number of steps')
+
+```
+
